@@ -61,6 +61,35 @@
             <div class="controls">
                 <button id="startCustomerCamera" class="secondary-btn">Start Camera</button>
                 <button id="scanCustomerPlate" class="primary-btn" disabled>Scan Plate</button>
+                <button id="manualCustomerInput" class="secondary-btn">Manual Input</button>
+            </div>
+            
+            <!-- Manual Input Modal -->
+            <div id="manualInputModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <h3>Enter License Plate Manually</h3>
+                    <p>If scanning doesn't work, you can enter your license plate number:</p>
+                    
+                    <div class="manual-input-section">
+                        <input type="text" id="manualPlateInput" placeholder="e.g., AB12 CDE" 
+                               style="width: 100%; padding: 15px; font-size: 18px; text-align: center; text-transform: uppercase; letter-spacing: 2px; font-family: 'Courier New', monospace;">
+                        
+                        <div class="format-examples">
+                            <p><strong>UK Format Examples:</strong></p>
+                            <div class="example-formats">
+                                <span class="format-example">AB12 CDE</span>
+                                <span class="format-example">A123 BCD</span>
+                                <span class="format-example">ABC 123D</span>
+                                <span class="format-example">ABC 123</span>
+                            </div>
+                        </div>
+                        
+                        <div class="modal-buttons">
+                            <button id="confirmManualInput" class="primary-btn" disabled>Confirm</button>
+                            <button id="cancelManualInput" class="secondary-btn">Cancel</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <div id="customerStatus"></div>
@@ -126,6 +155,7 @@
             <div class="controls">
                 <button id="startAttendantCamera" class="secondary-btn">Start Camera</button>
                 <button id="scanAttendantPlate" class="primary-btn" disabled>Quick Scan</button>
+                <button id="manualAttendantInput" class="secondary-btn">Manual Check</button>
                 <button id="clearAttendantList" class="secondary-btn">Clear List</button>
             </div>
             
@@ -152,6 +182,7 @@
 
     <script src="js/api.js"></script>
     <script src="js/plate-detector.js"></script>
+    <script src="js/image-processor.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

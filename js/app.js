@@ -13,8 +13,9 @@ class ParkingScanner {
         this.api = new ParkingAPI();
         this.apiAvailable = false;
         
-        // Initialize license plate detector
+        // Initialize license plate detector and image processor
         this.plateDetector = new LicensePlateDetector();
+        this.imageProcessor = new ImageProcessor();
         
         // Fallback to localStorage if API is not available
         this.parkingDatabase = this.loadParkingDatabase();
@@ -46,6 +47,24 @@ class ParkingScanner {
         
         // Pay button
         document.getElementById('payBtn').addEventListener('click', () => this.processPayment());
+        
+        // Manual input buttons
+        document.getElementById('manualCustomerInput').addEventListener('click', () => this.showManualInput('customer'));
+        document.getElementById('manualAttendantInput').addEventListener('click', () => this.showManualInput('attendant'));
+        
+        // Manual input modal events
+        document.getElementById('confirmManualInput').addEventListener('click', () => this.confirmManualInput());
+        document.getElementById('cancelManualInput').addEventListener('click', () => this.hideManualInput());
+        
+        // Auto-validate manual input
+        document.getElementById('manualPlateInput').addEventListener('input', (e) => this.validateManualInput(e.target.value));
+        
+        // Enter key support for manual input
+        document.getElementById('manualPlateInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !document.getElementById('confirmManualInput').disabled) {
+                this.confirmManualInput();
+            }
+        });
     }
     
     selectDuration(btn) {
@@ -148,15 +167,34 @@ class ParkingScanner {
         try {
             this.showStatus('Starting camera...', 'scanning');
             
-            // Progressive camera constraints for better compatibility
+            // Enhanced camera constraints optimized for license plate scanning
             const constraintOptions = [
-                // Option 1: Basic back camera
+                // Option 1: High-quality back camera with focus optimization
+                { 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { min: 640, ideal: 1280, max: 1920 },
+                        height: { min: 480, ideal: 720, max: 1080 },
+                        aspectRatio: { ideal: 16/9 },
+                        focusMode: 'continuous',
+                        exposureMode: 'continuous',
+                        whiteBalanceMode: 'continuous'
+                    } 
+                },
+                // Option 2: Medium quality with autofocus
+                { 
+                    video: { 
+                        facingMode: { ideal: 'environment' },
+                        width: { min: 480, ideal: 720, max: 1280 },
+                        height: { min: 360, ideal: 540, max: 720 },
+                        focusMode: 'auto'
+                    } 
+                },
+                // Option 3: Basic back camera
                 { video: { facingMode: 'environment' } },
-                // Option 2: Any back camera with flexible resolution
-                { video: { facingMode: { ideal: 'environment' }, width: { min: 320, ideal: 640 }, height: { min: 240, ideal: 480 } } },
-                // Option 3: Any camera with minimal constraints
-                { video: { width: { min: 320 }, height: { min: 240 } } },
-                // Option 4: Most basic request
+                // Option 4: Any camera with good resolution
+                { video: { width: { min: 640, ideal: 1280 }, height: { min: 480, ideal: 720 } } },
+                // Option 5: Fallback
                 { video: true }
             ];
 
@@ -197,7 +235,10 @@ class ParkingScanner {
                 startBtn.onclick = () => this.stopCamera();
                 scanBtn.disabled = false;
                 
-                this.showStatus(`✅ Camera ready! Option ${successOption} - ${this.currentVideo.videoWidth}x${this.currentVideo.videoHeight}`, 'success');
+                // Add capture guidance overlay
+                this.addCaptureGuidance();
+                
+                this.showStatus(`✅ Camera ready! ${this.currentVideo.videoWidth}x${this.currentVideo.videoHeight} - Position license plate in the green box`, 'success');
             };
             
         } catch (error) {
@@ -239,7 +280,6 @@ class ParkingScanner {
                 document.getElementById('scanAttendantPlate');
             
             scanBtn.disabled = true;
-            this.showStatus('Scanning license plate...', 'scanning');
             
             // Get selected country
             const countrySelector = mode === 'customer' ? 
@@ -250,42 +290,36 @@ class ParkingScanner {
             // Capture current frame
             const ctx = this.currentCanvas.getContext('2d');
             ctx.drawImage(this.currentVideo, 0, 0, this.currentCanvas.width, this.currentCanvas.height);
-            const imageData = this.currentCanvas.toDataURL('image/png');
             
-            // Get country-specific OCR settings
-            const ocrSettings = this.plateDetector.getOCRSettings(selectedCountry);
+            // Show advanced processing status
+            this.showAdvancedStatus('🔄 Initializing advanced OCR...', 'scanning');
             
-            // Use Tesseract.js for OCR with country-optimized settings
-            const { data: { text } } = await Tesseract.recognize(
-                imageData,
-                'eng',
-                {
-                    logger: m => {
-                        if (m.status === 'recognizing text') {
-                            const progress = Math.round(m.progress * 100);
-                            this.showStatus(`Processing ${selectedCountry} plate: ${progress}%`, 'scanning');
-                        }
-                    },
-                    ...ocrSettings
-                }
-            );
+            // Use multiple OCR attempts with image preprocessing
+            const results = await this.imageProcessor.performMultipleOCR(this.currentCanvas, selectedCountry);
             
-            const plateText = this.plateDetector.extractLicensePlate(text, selectedCountry);
-            
-            if (plateText) {
+            if (results.length > 0) {
+                // Select best result
+                const bestResult = this.imageProcessor.selectBestResult(results);
+                
+                this.showAdvancedStatus(`✅ Detected: ${bestResult.plate} (${bestResult.confidence}% confidence)`, 'success');
+                
                 if (mode === 'customer') {
-                    this.handleCustomerScan(plateText);
+                    this.handleCustomerScan(bestResult.plate);
                 } else {
-                    this.handleAttendantScan(plateText);
+                    this.handleAttendantScan(bestResult.plate);
                 }
-                this.showStatus('License plate detected successfully!', 'success');
+                
+                // Show processing details
+                this.showOCRAttempts(results);
+                
             } else {
-                this.showStatus('No license plate detected. Try getting closer or adjusting the angle.', 'error');
+                this.showAdvancedStatus('❌ No license plate detected in any attempt', 'error');
+                this.showScanningTips(mode);
             }
             
         } catch (error) {
             console.error('OCR Error:', error);
-            this.showStatus('Error scanning image. Please try again.', 'error');
+            this.showStatus(`Error: ${error.message}. Try manual input instead.`, 'error');
         } finally {
             const scanBtn = mode === 'customer' ? 
                 document.getElementById('scanCustomerPlate') : 
@@ -413,6 +447,167 @@ class ParkingScanner {
     }
     
     
+    // Manual input methods
+    showManualInput(mode) {
+        this.currentManualMode = mode;
+        const modal = document.getElementById('manualInputModal');
+        const input = document.getElementById('manualPlateInput');
+        
+        // Clear previous input
+        input.value = '';
+        document.getElementById('confirmManualInput').disabled = true;
+        
+        // Show modal
+        modal.style.display = 'flex';
+        input.focus();
+        
+        // Update examples based on selected country
+        const countrySelector = mode === 'customer' ? 
+            document.getElementById('customerCountry') : 
+            document.getElementById('attendantCountry');
+        const country = countrySelector.value;
+        
+        this.updateFormatExamples(country);
+    }
+    
+    hideManualInput() {
+        document.getElementById('manualInputModal').style.display = 'none';
+        this.currentManualMode = null;
+    }
+    
+    validateManualInput(value) {
+        const countrySelector = this.currentManualMode === 'customer' ? 
+            document.getElementById('customerCountry') : 
+            document.getElementById('attendantCountry');
+        const country = countrySelector.value;
+        
+        const cleaned = value.trim().toUpperCase();
+        const isValid = this.plateDetector.validatePlate(cleaned, country);
+        
+        const confirmBtn = document.getElementById('confirmManualInput');
+        confirmBtn.disabled = !isValid || cleaned.length < 2;
+        
+        // Visual feedback
+        const input = document.getElementById('manualPlateInput');
+        if (cleaned.length > 0) {
+            input.style.borderColor = isValid ? '#27ae60' : '#e74c3c';
+            input.style.background = isValid ? '#e8f5e8' : '#ffeaea';
+        } else {
+            input.style.borderColor = '';
+            input.style.background = '';
+        }
+    }
+    
+    confirmManualInput() {
+        const input = document.getElementById('manualPlateInput');
+        const plateText = input.value.trim().toUpperCase();
+        
+        if (plateText) {
+            if (this.currentManualMode === 'customer') {
+                this.handleCustomerScan(plateText);
+                this.showStatus(`✅ License plate entered: ${plateText}`, 'success');
+            } else {
+                this.handleAttendantScan(plateText);
+                this.showStatus(`✅ Manual check completed: ${plateText}`, 'success');
+            }
+        }
+        
+        this.hideManualInput();
+    }
+    
+    addCaptureGuidance() {
+        // Remove existing guidance
+        const existingGuidance = document.querySelector('.capture-guidance');
+        if (existingGuidance) {
+            existingGuidance.remove();
+        }
+        
+        const cameraContainer = document.querySelector(`#${this.currentMode}Interface .camera-container`);
+        if (cameraContainer) {
+            const guidance = document.createElement('div');
+            guidance.className = 'capture-guidance';
+            guidance.innerHTML = '📱 Position license plate here';
+            cameraContainer.appendChild(guidance);
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                if (guidance.parentNode) {
+                    guidance.style.opacity = '0.3';
+                }
+            }, 5000);
+        }
+    }
+    
+    updateFormatExamples(country) {
+        const examples = this.plateDetector.getExamplePatterns(country);
+        const container = document.querySelector('.example-formats');
+        
+        container.innerHTML = examples.slice(0, 4).map(format => 
+            `<span class="format-example">${format}</span>`
+        ).join('');
+    }
+    
+    // Enhanced status display methods
+    showAdvancedStatus(message, type) {
+        const statusDiv = this.currentMode === 'customer' ? 
+            document.getElementById('customerStatus') : 
+            document.getElementById('attendantStatus');
+        
+        statusDiv.innerHTML = type === 'scanning' ? 
+            `<div class="status ${type}"><span class="loading-spinner"></span>${message}</div>` :
+            `<div class="status ${type}">${message}</div>`;
+    }
+    
+    showOCRAttempts(results) {
+        const statusDiv = this.currentMode === 'customer' ? 
+            document.getElementById('customerStatus') : 
+            document.getElementById('attendantStatus');
+        
+        const attemptsHtml = results.map(result => {
+            const confidenceWidth = Math.max(10, result.confidence || 0);
+            return `
+                <div class="ocr-attempt">
+                    <span>${result.attempt}: "${result.plate || 'No result'}"</span>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: ${confidenceWidth}%"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        const currentStatus = statusDiv.innerHTML;
+        statusDiv.innerHTML = currentStatus + `
+            <div class="ocr-attempts">
+                <strong>OCR Attempts:</strong>
+                ${attemptsHtml}
+            </div>
+        `;
+    }
+    
+    showScanningTips(mode) {
+        const statusDiv = this.currentMode === 'customer' ? 
+            document.getElementById('customerStatus') : 
+            document.getElementById('attendantStatus');
+        
+        const manualBtn = mode === 'customer' ? 'manualCustomerInput' : 'manualAttendantInput';
+        
+        statusDiv.innerHTML += `
+            <div class="processing-steps">
+                <strong>💡 Scanning Tips:</strong>
+                <div class="processing-step">📸 Ensure good lighting</div>
+                <div class="processing-step">🎯 Get close to the license plate</div>
+                <div class="processing-step">📐 Hold phone straight</div>
+                <div class="processing-step">🚫 Avoid shadows and reflections</div>
+                <div style="margin-top: 15px; text-align: center;">
+                    <button onclick="document.getElementById('${manualBtn}').click()" 
+                            style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                        ✏️ Enter Manually Instead
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
     showStatus(message, type) {
         const statusDiv = this.currentMode === 'customer' ? 
             document.getElementById('customerStatus') : 
