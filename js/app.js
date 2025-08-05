@@ -9,12 +9,35 @@ class ParkingScanner {
         this.scannedPlates = [];
         this.stats = { scanned: 0, paid: 0, unpaid: 0 };
         
-        // Mock parking database
+        // Initialize API service
+        this.api = new ParkingAPI();
+        this.apiAvailable = false;
+        
+        // Initialize license plate detector
+        this.plateDetector = new LicensePlateDetector();
+        
+        // Fallback to localStorage if API is not available
         this.parkingDatabase = this.loadParkingDatabase();
         
         this.initEventListeners();
+        this.initializeAPI();
     }
     
+    async initializeAPI() {
+        console.log('🔄 Initializing API connection...');
+        try {
+            this.apiAvailable = await this.api.testConnection();
+            if (this.apiAvailable) {
+                console.log('✅ Using backend API for data storage');
+            } else {
+                console.log('⚠️ API unavailable, falling back to localStorage');
+            }
+        } catch (error) {
+            console.error('🚨 API initialization failed:', error);
+            this.apiAvailable = false;
+        }
+    }
+
     initEventListeners() {
         // Time selection buttons
         document.querySelectorAll('.time-btn').forEach(btn => {
@@ -42,34 +65,51 @@ class ParkingScanner {
     async processPayment() {
         const plateText = document.getElementById('customerPlateText').textContent;
         
-        // Simulate payment processing
-        this.showStatus('Processing payment...', 'scanning');
-        
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Add to parking database
-        const expirationTime = new Date();
-        expirationTime.setHours(expirationTime.getHours() + this.selectedDuration);
-        
-        this.parkingDatabase[plateText] = {
-            paid: true,
-            expirationTime: expirationTime.toISOString(),
-            duration: this.selectedDuration,
-            cost: this.selectedCost,
-            paidAt: new Date().toISOString()
-        };
-        
-        this.saveParkingDatabase();
-        
-        this.showStatus(`Payment successful! Parking expires at ${expirationTime.toLocaleTimeString()}`, 'success');
-        
-        // Reset for next customer
-        setTimeout(() => {
-            document.getElementById('customerResult').style.display = 'none';
-            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('selected'));
-            document.getElementById('payBtn').disabled = true;
-            document.getElementById('payBtn').textContent = 'Select Duration to Pay';
-        }, 3000);
+        try {
+            this.showStatus('Processing payment...', 'scanning');
+            
+            if (this.apiAvailable) {
+                // Use API for payment processing
+                const response = await this.api.createPayment(
+                    plateText, 
+                    this.selectedDuration, 
+                    this.selectedCost
+                );
+                
+                const expirationTime = new Date(response.payment.expirationTime);
+                this.showStatus(`Payment successful! Parking expires at ${expirationTime.toLocaleTimeString()}`, 'success');
+                
+            } else {
+                // Fallback to localStorage
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                const expirationTime = new Date();
+                expirationTime.setHours(expirationTime.getHours() + this.selectedDuration);
+                
+                this.parkingDatabase[plateText] = {
+                    paid: true,
+                    expirationTime: expirationTime.toISOString(),
+                    duration: this.selectedDuration,
+                    cost: this.selectedCost,
+                    paidAt: new Date().toISOString()
+                };
+                
+                this.saveParkingDatabase();
+                this.showStatus(`Payment successful! Parking expires at ${expirationTime.toLocaleTimeString()}`, 'success');
+            }
+            
+            // Reset for next customer
+            setTimeout(() => {
+                document.getElementById('customerResult').style.display = 'none';
+                document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('selected'));
+                document.getElementById('payBtn').disabled = true;
+                document.getElementById('payBtn').textContent = 'Select Duration to Pay';
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Payment processing failed:', error);
+            this.showStatus(`Payment failed: ${error.message}`, 'error');
+        }
     }
     
     selectMode(mode) {
@@ -201,12 +241,21 @@ class ParkingScanner {
             scanBtn.disabled = true;
             this.showStatus('Scanning license plate...', 'scanning');
             
+            // Get selected country
+            const countrySelector = mode === 'customer' ? 
+                document.getElementById('customerCountry') : 
+                document.getElementById('attendantCountry');
+            const selectedCountry = countrySelector.value;
+            
             // Capture current frame
             const ctx = this.currentCanvas.getContext('2d');
             ctx.drawImage(this.currentVideo, 0, 0, this.currentCanvas.width, this.currentCanvas.height);
             const imageData = this.currentCanvas.toDataURL('image/png');
             
-            // Use Tesseract.js for OCR with UK-optimized settings
+            // Get country-specific OCR settings
+            const ocrSettings = this.plateDetector.getOCRSettings(selectedCountry);
+            
+            // Use Tesseract.js for OCR with country-optimized settings
             const { data: { text } } = await Tesseract.recognize(
                 imageData,
                 'eng',
@@ -214,16 +263,14 @@ class ParkingScanner {
                     logger: m => {
                         if (m.status === 'recognizing text') {
                             const progress = Math.round(m.progress * 100);
-                            this.showStatus(`Processing: ${progress}%`, 'scanning');
+                            this.showStatus(`Processing ${selectedCountry} plate: ${progress}%`, 'scanning');
                         }
                     },
-                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
-                    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
-                    preserve_interword_spaces: '1'
+                    ...ocrSettings
                 }
             );
             
-            const plateText = this.extractLicensePlate(text);
+            const plateText = this.plateDetector.extractLicensePlate(text, selectedCountry);
             
             if (plateText) {
                 if (mode === 'customer') {
@@ -247,35 +294,72 @@ class ParkingScanner {
         }
     }
     
-    handleCustomerScan(plateText) {
+    async handleCustomerScan(plateText) {
         document.getElementById('customerPlateText').textContent = plateText;
         document.getElementById('customerResult').style.display = 'block';
         
-        // Check if already paid
-        const existing = this.parkingDatabase[plateText];
-        if (existing && existing.paid && new Date(existing.expirationTime) > new Date()) {
-            this.showStatus(`Already paid! Expires at ${new Date(existing.expirationTime).toLocaleTimeString()}`, 'success');
+        try {
+            // Check if already paid
+            let paymentStatus;
+            
+            if (this.apiAvailable) {
+                const response = await this.api.getPaymentStatus(plateText);
+                paymentStatus = response;
+            } else {
+                // Fallback to localStorage
+                const existing = this.parkingDatabase[plateText];
+                if (existing && existing.paid && new Date(existing.expirationTime) > new Date()) {
+                    paymentStatus = { 
+                        status: 'paid', 
+                        expirationTime: existing.expirationTime 
+                    };
+                } else {
+                    paymentStatus = { status: 'unpaid' };
+                }
+            }
+            
+            if (paymentStatus.status === 'paid') {
+                const expirationTime = new Date(paymentStatus.expirationTime);
+                this.showStatus(`Already paid! Expires at ${expirationTime.toLocaleTimeString()}`, 'success');
+            }
+            
+        } catch (error) {
+            console.error('Error checking payment status:', error);
+            // Don't show error to user, just proceed with payment flow
         }
     }
     
-    handleAttendantScan(plateText) {
-        const paymentStatus = this.checkPaymentStatus(plateText);
-        
-        // Add to scan list
-        this.scannedPlates.unshift({
-            plate: plateText,
-            status: paymentStatus.status,
-            time: new Date().toLocaleTimeString(),
-            expirationTime: paymentStatus.expirationTime
-        });
-        
-        // Keep only last 20 scans
-        if (this.scannedPlates.length > 20) {
-            this.scannedPlates = this.scannedPlates.slice(0, 20);
+    async handleAttendantScan(plateText) {
+        try {
+            let paymentStatus;
+            
+            if (this.apiAvailable) {
+                const response = await this.api.getPaymentStatus(plateText);
+                paymentStatus = response;
+            } else {
+                paymentStatus = this.checkPaymentStatus(plateText);
+            }
+            
+            // Add to scan list
+            this.scannedPlates.unshift({
+                plate: plateText,
+                status: paymentStatus.status,
+                time: new Date().toLocaleTimeString(),
+                expirationTime: paymentStatus.expirationTime
+            });
+            
+            // Keep only last 20 scans
+            if (this.scannedPlates.length > 20) {
+                this.scannedPlates = this.scannedPlates.slice(0, 20);
+            }
+            
+            this.updateScanList();
+            this.updateStats();
+            
+        } catch (error) {
+            console.error('Error checking payment status:', error);
+            this.showStatus(`Error checking ${plateText}: ${error.message}`, 'error');
         }
-        
-        this.updateScanList();
-        this.updateStats();
     }
     
     checkPaymentStatus(plateText) {
@@ -328,122 +412,6 @@ class ParkingScanner {
         this.showStatus('Scan list cleared.', 'success');
     }
     
-    extractLicensePlate(text) {
-        const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-        
-        // UK-specific license plate patterns (prioritized)
-        const ukPatterns = [
-            // Current UK format: AB12 CDE (2001-present)
-            /^[A-Z]{2}[0-9]{2}[A-Z]{3}$/,
-            // Current UK with space: AB12 CDE
-            /^[A-Z]{2}[0-9]{2}\s[A-Z]{3}$/,
-            // Prefix format: A123 BCD (1983-2001)
-            /^[A-Z][0-9]{3}[A-Z]{3}$/,
-            // Prefix with space: A123 BCD  
-            /^[A-Z][0-9]{3}\s[A-Z]{3}$/,
-            // Suffix format: ABC 123D (1963-1983)
-            /^[A-Z]{3}[0-9]{3}[A-Z]$/,
-            // Suffix with space: ABC 123D
-            /^[A-Z]{3}\s[0-9]{3}[A-Z]$/,
-            // Old format: ABC 123 (pre-1963)
-            /^[A-Z]{3}[0-9]{3}$/,
-            /^[A-Z]{3}\s[0-9]{3}$/
-        ];
-        
-        // US and other international patterns (lower priority)
-        const otherPatterns = [
-            /^[A-Z0-9]{2,3}[-\s]?[A-Z0-9]{3,4}$/,  // ABC-1234 or AB-1234
-            /^[A-Z0-9]{6,8}$/,                      // ABC1234 (no separator)
-            /^[0-9]{1,3}[-\s]?[A-Z]{3}$/,          // 123-ABC
-            /^[A-Z]{3}[-\s]?[0-9]{3,4}$/           // ABC-123
-        ];
-        
-        // Combine patterns with UK patterns first
-        const allPatterns = [...ukPatterns, ...otherPatterns];
-        
-        for (const line of lines) {
-            // Enhanced cleaning for UK plates
-            let cleaned = line
-                .replace(/[^\w\s-]/g, '') // Remove special chars except letters, numbers, spaces, hyphens
-                .replace(/[Il1|]/g, '1')  // Common OCR mistakes: I,l,| -> 1
-                .replace(/[O0oQ]/g, '0')  // Common OCR mistakes: O,o,Q -> 0
-                .replace(/[S5$]/g, '5')   // Common OCR mistakes: S,$ -> 5
-                .replace(/[Z2]/g, '2')    // Common OCR mistakes: Z -> 2
-                .replace(/[B8]/g, '8')    // Common OCR mistakes: B -> 8
-                .replace(/[G6]/g, '6')    // Common OCR mistakes: G -> 6
-                .trim()
-                .toUpperCase();
-            
-            // Try with original spacing first
-            for (const pattern of allPatterns) {
-                if (pattern.test(cleaned) && cleaned.length >= 5 && cleaned.length <= 8) {
-                    return this.formatUKPlate(cleaned);
-                }
-            }
-            
-            // Try without spaces
-            const noSpaces = cleaned.replace(/\s+/g, '');
-            for (const pattern of allPatterns) {
-                if (pattern.test(noSpaces) && noSpaces.length >= 5 && noSpaces.length <= 7) {
-                    return this.formatUKPlate(noSpaces);
-                }
-            }
-            
-            // Try with single space in middle (common UK format)
-            if (noSpaces.length === 7) {
-                const withSpace = noSpaces.substring(0, 4) + ' ' + noSpaces.substring(4);
-                for (const pattern of ukPatterns) {
-                    if (pattern.test(withSpace)) {
-                        return this.formatUKPlate(withSpace);
-                    }
-                }
-            }
-            
-            // Fallback: check if it looks like a reasonable UK plate
-            if (/^[A-Z0-9]+$/.test(noSpaces) && noSpaces.length >= 5 && noSpaces.length <= 7) {
-                if (this.isLikelyUKPlate(noSpaces)) {
-                    return this.formatUKPlate(noSpaces);
-                }
-            }
-        }
-        
-        return null;
-    }
-    
-    isLikelyUKPlate(plate) {
-        // Check if it matches common UK patterns
-        if (plate.length === 7) {
-            // AB12CDE format
-            return /^[A-Z]{2}[0-9]{2}[A-Z]{3}$/.test(plate);
-        } else if (plate.length === 6) {
-            // A123BCD format or ABC123 format
-            return /^[A-Z][0-9]{3}[A-Z]{3}$/.test(plate) || /^[A-Z]{3}[0-9]{3}$/.test(plate);
-        }
-        return false;
-    }
-    
-    formatUKPlate(plate) {
-        // Remove existing spaces
-        const clean = plate.replace(/\s+/g, '');
-        
-        // Format based on UK standards
-        if (clean.length === 7 && /^[A-Z]{2}[0-9]{2}[A-Z]{3}$/.test(clean)) {
-            // Current format: AB12 CDE
-            return clean.substring(0, 4) + ' ' + clean.substring(4);
-        } else if (clean.length === 7 && /^[A-Z][0-9]{3}[A-Z]{3}$/.test(clean)) {
-            // Prefix format: A123 BCD
-            return clean.substring(0, 4) + ' ' + clean.substring(4);
-        } else if (clean.length === 7 && /^[A-Z]{3}[0-9]{3}[A-Z]$/.test(clean)) {
-            // Suffix format: ABC 123D
-            return clean.substring(0, 3) + ' ' + clean.substring(3);
-        } else if (clean.length === 6 && /^[A-Z]{3}[0-9]{3}$/.test(clean)) {
-            // Old format: ABC 123
-            return clean.substring(0, 3) + ' ' + clean.substring(3);
-        }
-        
-        // Return as-is if no specific formatting applies
-        return clean;
-    }
     
     showStatus(message, type) {
         const statusDiv = this.currentMode === 'customer' ? 

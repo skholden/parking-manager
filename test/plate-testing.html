@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>License Plate Detection Testing Suite</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+    <script src="../js/plate-detector.js"></script>
+    <script src="test-data-generator.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { color: #2c3e50; text-align: center; }
+        h2 { color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        
+        .test-input {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            align-items: center;
+        }
+        
+        .test-input input, select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .test-input button {
+            padding: 8px 16px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .test-input button:hover {
+            background: #2980b9;
+        }
+        
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .result.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid #3498db;
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        
+        .image-upload {
+            border: 2px dashed #ddd;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .image-upload.dragover {
+            border-color: #3498db;
+            background: #f0f8ff;
+        }
+        
+        .test-image {
+            max-width: 300px;
+            max-height: 200px;
+            margin: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .batch-results {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .test-case {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 4px;
+            border-left: 4px solid #ddd;
+        }
+        
+        .test-case.pass {
+            border-left-color: #28a745;
+        }
+        
+        .test-case.fail {
+            border-left-color: #dc3545;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🅿️ License Plate Detection Testing Suite</h1>
+        
+        <!-- Statistics Dashboard -->
+        <div class="stats" id="statsContainer">
+            <div class="stat-card">
+                <div class="stat-number" id="totalTests">0</div>
+                <div class="stat-label">Total Tests</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="passedTests">0</div>
+                <div class="stat-label">Passed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="failedTests">0</div>
+                <div class="stat-label">Failed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="accuracyRate">0%</div>
+                <div class="stat-label">Accuracy</div>
+            </div>
+        </div>
+
+        <!-- Quick Text Testing -->
+        <div class="test-section">
+            <h2>🔤 Quick Text Pattern Testing</h2>
+            <p>Test license plate extraction from text without OCR</p>
+            
+            <div class="test-input">
+                <input type="text" id="textInput" placeholder="Enter text containing license plate (e.g., 'AB12 CDE')" style="flex: 1;">
+                <select id="countrySelect">
+                    <option value="UK">🇬🇧 UK</option>
+                    <option value="US">🇺🇸 US</option>
+                    <option value="DE">🇩🇪 Germany</option>
+                    <option value="FR">🇫🇷 France</option>
+                </select>
+                <button onclick="testTextExtraction()">Test</button>
+            </div>
+            
+            <div id="textResults"></div>
+        </div>
+
+        <!-- Batch Testing with UK Examples -->
+        <div class="test-section">
+            <h2>🇬🇧 UK License Plate Format Testing</h2>
+            <p>Automated testing with comprehensive UK license plate test suite</p>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button onclick="runUKBatchTests()" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                    Run Basic UK Tests
+                </button>
+                <button onclick="runComprehensiveTests()" style="background: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                    Run Comprehensive Test Suite
+                </button>
+                <button onclick="clearTestResults()" style="background: #95a5a6; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                    Clear Results
+                </button>
+            </div>
+            
+            <div class="progress-bar" id="batchProgress" style="display: none;">
+                <div class="progress-fill" id="batchProgressFill"></div>
+            </div>
+            
+            <div id="batchResults" class="batch-results" style="display: none;"></div>
+        </div>
+
+        <!-- Image Upload Testing -->
+        <div class="test-section">
+            <h2>📷 Image Testing</h2>
+            <p>Upload license plate images for OCR testing</p>
+            
+            <div class="image-upload" id="imageUpload">
+                <p>Drag and drop license plate images here, or click to select files</p>
+                <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+                <button onclick="document.getElementById('fileInput').click()" style="margin-top: 10px; padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Select Images
+                </button>
+            </div>
+            
+            <div class="test-input">
+                <label>Country for OCR:</label>
+                <select id="imageCountrySelect">
+                    <option value="UK">🇬🇧 UK</option>
+                    <option value="US">🇺🇸 US</option>
+                    <option value="DE">🇩🇪 Germany</option>
+                    <option value="FR">🇫🇷 France</option>
+                </select>
+            </div>
+            
+            <div id="imageResults"></div>
+        </div>
+
+        <!-- Pattern Examples -->
+        <div class="test-section">
+            <h2>📋 Supported Patterns</h2>
+            <div id="patternExamples"></div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize the testing framework
+        let plateDetector = new LicensePlateDetector();
+        let testGenerator = new UKPlateTestGenerator();
+        let testStats = { total: 0, passed: 0, failed: 0 };
+
+        // Initialize pattern examples
+        function initializePatternExamples() {
+            const countries = plateDetector.getSupportedCountries();
+            const container = document.getElementById('patternExamples');
+            
+            countries.forEach(country => {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <h4>${country.name} (${country.code})</h4>
+                    <p>Supported formats: ${country.patterns.join(', ')}</p>
+                `;
+                div.style.marginBottom = '15px';
+                container.appendChild(div);
+            });
+        }
+
+        // Test text extraction
+        function testTextExtraction() {
+            const text = document.getElementById('textInput').value;
+            const country = document.getElementById('countrySelect').value;
+            const resultsDiv = document.getElementById('textResults');
+            
+            if (!text.trim()) {
+                showResult(resultsDiv, 'Please enter some text to test', 'error');
+                return;
+            }
+
+            const result = plateDetector.extractLicensePlate(text, country);
+            
+            if (result) {
+                showResult(resultsDiv, `✅ Extracted: "${result}" from "${text}"`, 'success');
+                updateStats(true);
+            } else {
+                showResult(resultsDiv, `❌ No license plate found in "${text}"`, 'error');
+                updateStats(false);
+            }
+        }
+
+        // Run comprehensive UK batch tests
+        function runUKBatchTests() {
+            const ukTestCases = [
+                // Current format (2001-present)
+                { input: 'AB12 CDE', expected: 'AB12 CDE', description: 'Current format with space' },
+                { input: 'AB12CDE', expected: 'AB12 CDE', description: 'Current format without space' },
+                { input: 'PH07 AJN', expected: 'PH07 AJN', description: 'Current format example 1' },
+                { input: 'BT15 ABC', expected: 'BT15 ABC', description: 'Current format example 2' },
+                
+                // Prefix format (1983-2001)
+                { input: 'A123 BCD', expected: 'A123 BCD', description: 'Prefix format with space' },
+                { input: 'A123BCD', expected: 'A123 BCD', description: 'Prefix format without space' },
+                { input: 'M876 NPQ', expected: 'M876 NPQ', description: 'Prefix format example' },
+                
+                // Suffix format (1963-1983)
+                { input: 'ABC 123D', expected: 'ABC 123D', description: 'Suffix format with space' },
+                { input: 'ABC123D', expected: 'ABC 123D', description: 'Suffix format without space' },
+                { input: 'KNV 147P', expected: 'KNV 147P', description: 'Suffix format example' },
+                
+                // Old format (pre-1963)
+                { input: 'ABC 123', expected: 'ABC 123', description: 'Old format with space' },
+                { input: 'ABC123', expected: 'ABC 123', description: 'Old format without space' },
+                
+                // Test with OCR mistakes
+                { input: 'AB1Z CDE', expected: 'AB12 CDE', description: 'OCR mistake: Z->2' },
+                { input: 'ABI2 CDE', expected: 'AB12 CDE', description: 'OCR mistake: I->1' },
+                { input: 'AB0 CDE', expected: 'AB0 CDE', description: 'Valid zero in registration' },
+                
+                // Test with noise
+                { input: 'Reg: AB12 CDE End', expected: 'AB12 CDE', description: 'Text with noise' },
+                { input: 'License AB12CDE number', expected: 'AB12 CDE', description: 'Embedded in text' },
+                
+                // Edge cases
+                { input: '', expected: null, description: 'Empty input' },
+                { input: '12345', expected: null, description: 'Numbers only' },
+                { input: 'ABCDEF', expected: null, description: 'Letters only' },
+                { input: 'AB12 CDEF', expected: null, description: 'Too many letters' }
+            ];
+
+            const progressBar = document.getElementById('batchProgress');
+            const progressFill = document.getElementById('batchProgressFill');
+            const resultsDiv = document.getElementById('batchResults');
+            
+            progressBar.style.display = 'block';
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = '<h3>Running UK Format Tests...</h3>';
+            
+            let completedTests = 0;
+            const totalTests = ukTestCases.length;
+            
+            ukTestCases.forEach((testCase, index) => {
+                setTimeout(() => {
+                    const result = plateDetector.extractLicensePlate(testCase.input, 'UK');
+                    const passed = result === testCase.expected;
+                    
+                    const testDiv = document.createElement('div');
+                    testDiv.className = `test-case ${passed ? 'pass' : 'fail'}`;
+                    testDiv.innerHTML = `
+                        <div>
+                            <strong>${testCase.description}</strong><br>
+                            Input: "${testCase.input}" → Expected: "${testCase.expected}" → Got: "${result}"
+                        </div>
+                        <div>${passed ? '✅ PASS' : '❌ FAIL'}</div>
+                    `;
+                    
+                    resultsDiv.appendChild(testDiv);
+                    updateStats(passed);
+                    
+                    completedTests++;
+                    const progress = (completedTests / totalTests) * 100;
+                    progressFill.style.width = progress + '%';
+                    
+                    if (completedTests === totalTests) {
+                        const summary = document.createElement('div');
+                        summary.innerHTML = `<h3>✅ Batch testing complete! Passed: ${testStats.passed}/${testStats.total}</h3>`;
+                        summary.style.textAlign = 'center';
+                        summary.style.marginTop = '20px';
+                        summary.style.padding = '15px';
+                        summary.style.background = '#d4edda';
+                        summary.style.borderRadius = '8px';
+                        resultsDiv.appendChild(summary);
+                    }
+                }, index * 100); // Stagger tests for visual effect
+            });
+        }
+
+        // Handle image upload testing
+        function setupImageTesting() {
+            const imageUpload = document.getElementById('imageUpload');
+            const fileInput = document.getElementById('fileInput');
+            
+            // Drag and drop functionality
+            imageUpload.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                imageUpload.classList.add('dragover');
+            });
+            
+            imageUpload.addEventListener('dragleave', () => {
+                imageUpload.classList.remove('dragover');
+            });
+            
+            imageUpload.addEventListener('drop', (e) => {
+                e.preventDefault();
+                imageUpload.classList.remove('dragover');
+                const files = Array.from(e.dataTransfer.files);
+                processImageFiles(files);
+            });
+            
+            fileInput.addEventListener('change', (e) => {
+                const files = Array.from(e.target.files);
+                processImageFiles(files);
+            });
+        }
+
+        // Process uploaded image files
+        async function processImageFiles(files) {
+            const country = document.getElementById('imageCountrySelect').value;
+            const resultsDiv = document.getElementById('imageResults');
+            
+            resultsDiv.innerHTML = '<h3>Processing images...</h3>';
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                
+                if (!file.type.startsWith('image/')) {
+                    continue;
+                }
+                
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'result info';
+                resultDiv.innerHTML = `Processing ${file.name}...`;
+                resultsDiv.appendChild(resultDiv);
+                
+                try {
+                    // Create image element
+                    const img = document.createElement('img');
+                    img.className = 'test-image';
+                    img.src = URL.createObjectURL(file);
+                    resultDiv.appendChild(img);
+                    
+                    // Get OCR settings for the country
+                    const ocrSettings = plateDetector.getOCRSettings(country);
+                    
+                    // Perform OCR
+                    const { data: { text } } = await Tesseract.recognize(
+                        img,
+                        'eng',
+                        {
+                            logger: m => {
+                                if (m.status === 'recognizing text') {
+                                    const progress = Math.round(m.progress * 100);
+                                    resultDiv.innerHTML = `Processing ${file.name}... ${progress}%`;
+                                    resultDiv.appendChild(img);
+                                }
+                            },
+                            ...ocrSettings
+                        }
+                    );
+                    
+                    // Extract license plate
+                    const plateText = plateDetector.extractLicensePlate(text, country);
+                    
+                    if (plateText) {
+                        resultDiv.className = 'result success';
+                        resultDiv.innerHTML = `✅ ${file.name}: Found "${plateText}"<br>Raw OCR: "${text.trim()}"`;
+                        resultDiv.appendChild(img);
+                        updateStats(true);
+                    } else {
+                        resultDiv.className = 'result error';
+                        resultDiv.innerHTML = `❌ ${file.name}: No license plate detected<br>Raw OCR: "${text.trim()}"`;
+                        resultDiv.appendChild(img);
+                        updateStats(false);
+                    }
+                    
+                } catch (error) {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ ${file.name}: Error processing image - ${error.message}`;
+                    updateStats(false);
+                }
+            }
+        }
+
+        // Show result in UI
+        function showResult(container, message, type) {
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${type}`;
+            resultDiv.innerHTML = message;
+            container.innerHTML = '';
+            container.appendChild(resultDiv);
+        }
+
+        // Run comprehensive test suite with generated data
+        function runComprehensiveTests() {
+            const testSuite = testGenerator.generateComprehensiveTestSuite();
+            const allTests = [
+                ...testSuite.baseTests,
+                ...testSuite.ocrErrorTests,
+                ...testSuite.noisyTextTests,
+                ...testSuite.spacingTests,
+                ...testSuite.invalidTests
+            ];
+
+            const progressBar = document.getElementById('batchProgress');
+            const progressFill = document.getElementById('batchProgressFill');
+            const resultsDiv = document.getElementById('batchResults');
+            
+            progressBar.style.display = 'block';
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = '<h3>Running Comprehensive Test Suite...</h3>';
+            
+            let completedTests = 0;
+            const totalTests = allTests.length;
+            
+            // Reset stats for comprehensive test
+            testStats = { total: 0, passed: 0, failed: 0 };
+            
+            allTests.forEach((testCase, index) => {
+                setTimeout(() => {
+                    const result = plateDetector.extractLicensePlate(testCase.plate, 'UK');
+                    const passed = result === testCase.expected;
+                    
+                    const testDiv = document.createElement('div');
+                    testDiv.className = `test-case ${passed ? 'pass' : 'fail'}`;
+                    testDiv.innerHTML = `
+                        <div>
+                            <strong>${testCase.description || `Test ${index + 1}`}</strong><br>
+                            Input: "${testCase.plate}" → Expected: "${testCase.expected}" → Got: "${result}"
+                            ${testCase.format ? `<br><small>Format: ${testCase.format}</small>` : ''}
+                        </div>
+                        <div>${passed ? '✅ PASS' : '❌ FAIL'}</div>
+                    `;
+                    
+                    resultsDiv.appendChild(testDiv);
+                    updateStats(passed);
+                    
+                    completedTests++;
+                    const progress = (completedTests / totalTests) * 100;
+                    progressFill.style.width = progress + '%';
+                    
+                    if (completedTests === totalTests) {
+                        const accuracy = Math.round((testStats.passed / testStats.total) * 100);
+                        const summary = document.createElement('div');
+                        summary.innerHTML = `
+                            <h3>🎯 Comprehensive Test Complete!</h3>
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0;">
+                                <div style="text-align: center; padding: 15px; background: #e8f5e8; border-radius: 8px;">
+                                    <div style="font-size: 1.5em; font-weight: bold; color: #27ae60;">${testStats.passed}</div>
+                                    <div>Passed</div>
+                                </div>
+                                <div style="text-align: center; padding: 15px; background: #ffeaea; border-radius: 8px;">
+                                    <div style="font-size: 1.5em; font-weight: bold; color: #e74c3c;">${testStats.failed}</div>
+                                    <div>Failed</div>
+                                </div>
+                                <div style="text-align: center; padding: 15px; background: #f0f8ff; border-radius: 8px;">
+                                    <div style="font-size: 1.5em; font-weight: bold; color: #3498db;">${testStats.total}</div>
+                                    <div>Total</div>
+                                </div>
+                                <div style="text-align: center; padding: 15px; background: #fff3cd; border-radius: 8px;">
+                                    <div style="font-size: 1.5em; font-weight: bold; color: #856404;">${accuracy}%</div>
+                                    <div>Accuracy</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 15px; padding: 15px; background: ${accuracy >= 85 ? '#d4edda' : accuracy >= 70 ? '#fff3cd' : '#f8d7da'}; border-radius: 8px;">
+                                <strong>Result: ${accuracy >= 85 ? '🎉 Excellent!' : accuracy >= 70 ? '⚠️ Good, but could improve' : '❌ Needs improvement'}</strong><br>
+                                Target accuracy: 85%+ overall
+                            </div>
+                        `;
+                        resultsDiv.insertBefore(summary, resultsDiv.firstChild);
+                    }
+                }, index * 50); // Faster execution for comprehensive test
+            });
+        }
+
+        // Clear test results
+        function clearTestResults() {
+            const resultsDiv = document.getElementById('batchResults');
+            const progressBar = document.getElementById('batchProgress');
+            
+            resultsDiv.style.display = 'none';
+            progressBar.style.display = 'none';
+            resultsDiv.innerHTML = '';
+            
+            // Reset stats
+            testStats = { total: 0, passed: 0, failed: 0 };
+            updateStats(null); // Just update display
+        }
+
+        // Update statistics
+        function updateStats(passed) {
+            if (passed !== null) {
+                testStats.total++;
+                if (passed) {
+                    testStats.passed++;
+                } else {
+                    testStats.failed++;
+                }
+            }
+            
+            const accuracy = testStats.total > 0 ? Math.round((testStats.passed / testStats.total) * 100) : 0;
+            
+            document.getElementById('totalTests').textContent = testStats.total;
+            document.getElementById('passedTests').textContent = testStats.passed;
+            document.getElementById('failedTests').textContent = testStats.failed;
+            document.getElementById('accuracyRate').textContent = accuracy + '%';
+        }
+
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initializePatternExamples();
+            setupImageTesting();
+            
+            console.log('🧪 License Plate Testing Suite Loaded');
+            console.log('📋 Supported countries:', plateDetector.getSupportedCountries().length);
+        });
+    </script>
+</body>
+</html>

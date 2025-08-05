@@ -35,6 +35,22 @@
             <div class="interface-header">
                 <h2>💳 Pay for Parking</h2>
                 <p>Scan your license plate to pay for parking</p>
+                
+                <div class="country-selector">
+                    <label for="customerCountry">License Plate Format:</label>
+                    <select id="customerCountry" class="country-dropdown">
+                        <option value="UK" selected>🇬🇧 United Kingdom</option>
+                        <option value="US">🇺🇸 United States</option>
+                        <option value="DE">🇩🇪 Germany</option>
+                        <option value="FR">🇫🇷 France</option>
+                        <option value="ES">🇪🇸 Spain</option>
+                        <option value="IT">🇮🇹 Italy</option>
+                        <option value="NL">🇳🇱 Netherlands</option>
+                        <option value="AU">🇦🇺 Australia</option>
+                        <option value="CA">🇨🇦 Canada</option>
+                        <option value="JP">🇯🇵 Japan</option>
+                    </select>
+                </div>
             </div>
             
             <div class="camera-container">
@@ -84,6 +100,22 @@
             <div class="interface-header">
                 <h2>👮 Attendant Mode</h2>
                 <p>Quick scan to verify parking payments</p>
+                
+                <div class="country-selector">
+                    <label for="attendantCountry">License Plate Format:</label>
+                    <select id="attendantCountry" class="country-dropdown">
+                        <option value="UK" selected>🇬🇧 United Kingdom</option>
+                        <option value="US">🇺🇸 United States</option>
+                        <option value="DE">🇩🇪 Germany</option>
+                        <option value="FR">🇫🇷 France</option>
+                        <option value="ES">🇪🇸 Spain</option>
+                        <option value="IT">🇮🇹 Italy</option>
+                        <option value="NL">🇳🇱 Netherlands</option>
+                        <option value="AU">🇦🇺 Australia</option>
+                        <option value="CA">🇨🇦 Canada</option>
+                        <option value="JP">🇯🇵 Japan</option>
+                    </select>
+                </div>
             </div>
             
             <div class="camera-container">
@@ -118,6 +150,8 @@
         </div>
     </div>
 
+    <script src="js/api.js"></script>
+    <script src="js/plate-detector.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
