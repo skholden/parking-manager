@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parking Management Scanner</title>
+    <title>Parking Manager - Modern UI</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
     <link rel="stylesheet" href="css/modern-styles.css">
 </head>
@@ -17,12 +17,12 @@
                 
                 <div class="mode-grid">
                     <div class="mode-card" onclick="selectMode('customer')">
-                        <span class="mode-icon">⬜</span>
+                        <span class="mode-icon">💳</span>
                         <div class="mode-title">Pay Parking</div>
                         <div class="mode-description">Scan & pay for parking</div>
                     </div>
                     <div class="mode-card" onclick="selectMode('attendant')">
-                        <span class="mode-icon">▣</span>
+                        <span class="mode-icon">👮‍♀️</span>
                         <div class="mode-title">Verify Payments</div>
                         <div class="mode-description">Check payment status</div>
                     </div>
@@ -40,7 +40,7 @@
                 </button>
                 
                 <div class="interface-header">
-                    <h2 class="interface-title">⬜ Pay for Parking</h2>
+                    <h2 class="interface-title">💳 Pay for Parking</h2>
                     <p class="interface-subtitle">Scan your license plate or enter it manually</p>
                 </div>
                 
@@ -59,7 +59,7 @@
                         <option value="JP">🇯🇵 Japan</option>
                     </select>
                 </div>
-            
+                
                 <div class="camera-section">
                     <video id="customerVideo" class="camera-video" autoplay playsinline></video>
                     <canvas id="customerCanvas" class="camera-canvas"></canvas>
@@ -67,13 +67,13 @@
                 
                 <div class="button-grid">
                     <button id="startCustomerCamera" class="btn btn-secondary">
-                        ▶ Start Camera
+                        📹 Start Camera
                     </button>
                     <button id="scanCustomerPlate" class="btn btn-primary" disabled>
-                        ◉ Scan Plate
+                        🔍 Scan Plate
                     </button>
                     <button id="manualCustomerInput" class="btn btn-secondary">
-                        ◦ Enter Manually
+                        ✏️ Enter Manually
                     </button>
                 </div>
                 
@@ -104,13 +104,81 @@
                             </div>
                         </div>
                         <button class="btn btn-success" id="payBtn" disabled style="width: 100%; padding: 1rem;">
-                            ▶ Select Duration to Pay
+                            Select Duration to Pay
                         </button>
                     </div>
                 </div>
             </div>
 
             <!-- Attendant Interface -->
+            <div id="attendantInterface" class="interface-card">
+                <button class="btn btn-secondary" onclick="goBack()" style="margin-bottom: 1.5rem;">
+                    ← Back to Menu
+                </button>
+                
+                <div class="interface-header">
+                    <h2 class="interface-title">👮‍♀️ Verify Payments</h2>
+                    <p class="interface-subtitle">Quick scan to check parking payments</p>
+                </div>
+                
+                <div class="country-selector">
+                    <label class="country-label" for="attendantCountry">License Plate Format</label>
+                    <select id="attendantCountry" class="country-select">
+                        <option value="UK" selected>🇬🇧 United Kingdom</option>
+                        <option value="US">🇺🇸 United States</option>
+                        <option value="DE">🇩🇪 Germany</option>
+                        <option value="FR">🇫🇷 France</option>
+                        <option value="ES">🇪🇸 Spain</option>
+                        <option value="IT">🇮🇹 Italy</option>
+                        <option value="NL">🇳🇱 Netherlands</option>
+                        <option value="AU">🇦🇺 Australia</option>
+                        <option value="CA">🇨🇦 Canada</option>
+                        <option value="JP">🇯🇵 Japan</option>
+                    </select>
+                </div>
+                
+                <div class="camera-section">
+                    <video id="attendantVideo" class="camera-video" autoplay playsinline></video>
+                    <canvas id="attendantCanvas" class="camera-canvas"></canvas>
+                </div>
+                
+                <div class="button-grid">
+                    <button id="startAttendantCamera" class="btn btn-secondary">
+                        📹 Start Camera
+                    </button>
+                    <button id="scanAttendantPlate" class="btn btn-primary" disabled>
+                        🔍 Quick Scan
+                    </button>
+                    <button id="manualAttendantInput" class="btn btn-secondary">
+                        ✏️ Manual Check
+                    </button>
+                    <button id="clearAttendantList" class="btn btn-secondary">
+                        🗑️ Clear List
+                    </button>
+                </div>
+                
+                <div id="attendantStatus" class="status-container"></div>
+                
+                <!-- Stats Panel -->
+                <div class="stats-panel" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1.5rem 0; padding: 1.5rem; background: rgba(255, 255, 255, 0.05); border-radius: 1rem; border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div style="text-align: center;">
+                        <div id="totalScanned" style="font-size: 1.5rem; font-weight: 700; color: white;">0</div>
+                        <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); text-transform: uppercase; letter-spacing: 0.05em;">Scanned</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div id="totalPaid" style="font-size: 1.5rem; font-weight: 700; color: #22c55e;">0</div>
+                        <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); text-transform: uppercase; letter-spacing: 0.05em;">Paid</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div id="totalUnpaid" style="font-size: 1.5rem; font-weight: 700; color: #ef4444;">0</div>
+                        <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); text-transform: uppercase; letter-spacing: 0.05em;">Unpaid</div>
+                    </div>
+                </div>
+                
+                <div id="scanList" class="scan-list"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- Modern Manual Input Modal -->
     <div id="manualInputModal" class="modal" style="display: none;">
@@ -139,85 +207,16 @@
             
             <div style="display: flex; gap: 0.75rem;">
                 <button id="cancelManualInput" class="btn btn-secondary" style="flex: 1;">
-                    ◀ Cancel
+                    Cancel
                 </button>
                 <button id="confirmManualInput" class="btn btn-primary" style="flex: 1;" disabled>
-                    ▶ Confirm
+                    Confirm
                 </button>
             </div>
         </div>
     </div>
 
-            <!-- Attendant Interface -->
-            <div id="attendantInterface" class="interface-card">
-                <button class="btn btn-secondary" onclick="goBack()" style="margin-bottom: 1.5rem;">
-                    ← Back to Menu
-                </button>
-                
-                <div class="interface-header">
-                    <h2 class="interface-title">▣ Verify Payments</h2>
-                    <p class="interface-subtitle">Quick scan to check parking payments</p>
-                </div>
-                
-                <div class="country-selector">
-                    <label class="country-label" for="attendantCountry">License Plate Format</label>
-                    <select id="attendantCountry" class="country-select">
-                        <option value="UK" selected>🇬🇧 United Kingdom</option>
-                        <option value="US">🇺🇸 United States</option>
-                        <option value="DE">🇩🇪 Germany</option>
-                        <option value="FR">🇫🇷 France</option>
-                        <option value="ES">🇪🇸 Spain</option>
-                        <option value="IT">🇮🇹 Italy</option>
-                        <option value="NL">🇳🇱 Netherlands</option>
-                        <option value="AU">🇦🇺 Australia</option>
-                        <option value="CA">🇨🇦 Canada</option>
-                        <option value="JP">🇯🇵 Japan</option>
-                    </select>
-                </div>
-            
-                <div class="camera-section">
-                    <video id="attendantVideo" class="camera-video" autoplay playsinline></video>
-                    <canvas id="attendantCanvas" class="camera-canvas"></canvas>
-                </div>
-                
-                <div class="button-grid">
-                    <button id="startAttendantCamera" class="btn btn-secondary">
-                        ▶ Start Camera
-                    </button>
-                    <button id="scanAttendantPlate" class="btn btn-primary" disabled>
-                        ◉ Quick Scan
-                    </button>
-                    <button id="manualAttendantInput" class="btn btn-secondary">
-                        ◦ Manual Check
-                    </button>
-                    <button id="clearAttendantList" class="btn btn-secondary">
-                        ◾ Clear List
-                    </button>
-                </div>
-                
-                <div id="attendantStatus" class="status-container"></div>
-                
-                <!-- Stats Panel -->
-                <div class="stats-panel" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1.5rem 0; padding: 1.5rem; background: rgba(255, 255, 255, 0.05); border-radius: 1rem; border: 1px solid rgba(255, 255, 255, 0.1);">
-                    <div style="text-align: center;">
-                        <div id="totalScanned" style="font-size: 1.5rem; font-weight: 700; color: white;">0</div>
-                        <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); text-transform: uppercase; letter-spacing: 0.05em;">Scanned</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <div id="totalPaid" style="font-size: 1.5rem; font-weight: 700; color: #cbd5e1;">0</div>
-                        <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); text-transform: uppercase; letter-spacing: 0.05em;">Paid</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <div id="totalUnpaid" style="font-size: 1.5rem; font-weight: 700; color: #94a3b8;">0</div>
-                        <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); text-transform: uppercase; letter-spacing: 0.05em;">Unpaid</div>
-                    </div>
-                </div>
-                
-                <div id="scanList" class="scan-list"></div>
-            </div>
-        </div>
-    </div>
-
+    <!-- Scripts -->
     <script src="js/api.js"></script>
     <script src="js/plate-detector.js"></script>
     <script src="js/image-processor.js"></script>
